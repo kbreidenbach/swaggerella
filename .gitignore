@@ -1,0 +1,9 @@
+# Folders
+target/
+.bsp/
+.idea/
+project/project/
+
+# Files
+*.orig
+.DS_Store

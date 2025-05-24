@@ -20,6 +20,12 @@ object Utils {
   def toFieldName(str: String): String = {
     if (str.isEmpty) return ""
 
+    // Check if the string already has camelCase format (e.g. firstName)
+    if (str.matches("[a-z][a-zA-Z0-9]*") && str.matches(".*[A-Z].*")) {
+      // Already in camelCase format, preserve it
+      return str
+    }
+
     val pascal = toClassName(str)
     pascal.substring(0, 1).toLowerCase + pascal.substring(1)
   }

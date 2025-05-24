@@ -65,9 +65,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
 
               s"""$propDocs  opaque type ${className}_$scalaName = $propType
                  |
-                 |  object ${className}_$scalaName:
+                 |  object ${className}_$scalaName {
                  |    def apply(value: $propType): ${className}_$scalaName = value
                  |    extension (x: ${className}_$scalaName) def value: $propType = x
+                 |  }
                  |""".stripMargin
           }
           .mkString("\n")
@@ -82,13 +83,14 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
           .mkString(",\n    ")
 
         val companionObject =
-          s"""object $className:
+          s"""object $className {
              |$opaqueTypes
              |  def apply(
              |    $classFields
              |  ): $className = new $className(
              |    ${properties.keys.map(k => toFieldName(k)).mkString(",\n    ")}
              |  )
+             |}
              |""".stripMargin
 
         s"""$imports
@@ -111,9 +113,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |$docs
            |opaque type $className = List[$itemType]
            |
-           |object $className:
+           |object $className {
            |  def apply(value: List[$itemType]): $className = value
            |  extension (x: $className) def value: List[$itemType] = x
+           |}
            |""".stripMargin
 
       case StringSchema(name, description, format, enumValues) =>
@@ -132,8 +135,9 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
           s"""$imports
              |
              |$docs
-             |enum $className:
+             |enum $className {
              |$enumValuesList
+             |}
              |""".stripMargin
         } else {
           s"""$imports
@@ -141,9 +145,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
              |$docs
              |opaque type $className = String
              |
-             |object $className:
+             |object $className {
              |  def apply(value: String): $className = value
              |  extension (x: $className) def value: String = x
+             |}
              |""".stripMargin
         }
 
@@ -160,9 +165,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |$docs
            |opaque type $className = $baseType
            |
-           |object $className:
+           |object $className {
            |  def apply(value: $baseType): $className = value
            |  extension (x: $className) def value: $baseType = x
+           |}
            |""".stripMargin
 
       case NumberSchema(name, description, format) =>
@@ -178,9 +184,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |$docs
            |opaque type $className = $baseType
            |
-           |object $className:
+           |object $className {
            |  def apply(value: $baseType): $className = value
            |  extension (x: $className) def value: $baseType = x
+           |}
            |""".stripMargin
 
       case BooleanSchema(name, description) =>
@@ -192,9 +199,10 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |$docs
            |opaque type $className = Boolean
            |
-           |object $className:
+           |object $className {
            |  def apply(value: Boolean): $className = value
            |  extension (x: $className) def value: Boolean = x
+           |}
            |""".stripMargin
 
       case ReferenceSchema(name, reference, description) =>
@@ -234,17 +242,20 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
 
         s"""$imports
            |
-           |object ${className}Codecs:
-           |  given Encoder[$className] = new Encoder[$className]:
+           |object ${className}Codecs {
+           |  given Encoder[$className] = new Encoder[$className] {
            |    final def apply(obj: $className): Json = Json.obj(
            |$fieldEncoders
            |    )
+           |  }
            |
-           |  given Decoder[$className] = new Decoder[$className]:
+           |  given Decoder[$className] = new Decoder[$className] {
            |    final def apply(c: HCursor): Decoder.Result[$className] =
            |      for {
            |$fieldDecoders
            |      } yield $className(${properties.keys.map(k => toFieldName(k)).mkString(", ")})
+           |  }
+           |}
            |""".stripMargin
 
       case _ =>
@@ -269,11 +280,13 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
 
         s"""$imports
            |
-           |object ${className}Codecs:
-           |  given Encoder[$className] = new Encoder[$className]:
+           |object ${className}Codecs {
+           |  given Encoder[$className] = new Encoder[$className] {
            |    final def apply(obj: $className): Json = obj.value.asJson
+           |  }
            |
            |  given Decoder[$className] = Decoder[$baseType].map($className.apply)
+           |}
            |""".stripMargin
     }
 
@@ -294,7 +307,7 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |import io.circe.parser.decode
            |import $basePackage.codecs.circe.${className}Codecs.given
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[String].map(json => decode[$className](json).getOrElse(
            |      throw new RuntimeException(s"Could not decode JSON to $className: $$json")
@@ -302,83 +315,91 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |
            |  given Put[$className] =
            |    Put[String].contramap(_.asJson.noSpaces)
+           |}
            |""".stripMargin
 
       case ArraySchema(_, _, items) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[List[${getTypeFor(items)}]].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[List[${getTypeFor(items)}]].contramap(_.value)
+           |}
            |""".stripMargin
 
       case StringSchema(_, _, _, _) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[String].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[String].contramap(_.value)
+           |}
            |""".stripMargin
 
       case IntegerSchema(_, _, Some("int64")) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[Long].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[Long].contramap(_.value)
+           |}
            |""".stripMargin
 
       case IntegerSchema(_, _, _) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[Int].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[Int].contramap(_.value)
+           |}
            |""".stripMargin
 
       case NumberSchema(_, _, Some("float")) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[Float].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[Float].contramap(_.value)
+           |}
            |""".stripMargin
 
       case NumberSchema(_, _, _) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[Double].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[Double].contramap(_.value)
+           |}
            |""".stripMargin
 
       case BooleanSchema(_, _) =>
         s"""$imports
            |
-           |object ${className}Meta:
+           |object ${className}Meta {
            |  given Get[$className] =
            |    Get[Boolean].map($className.apply)
            |
            |  given Put[$className] =
            |    Put[Boolean].contramap(_.value)
+           |}
            |""".stripMargin
 
       case _ => ""
@@ -403,7 +424,7 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
       case ObjectSchema(_, description, properties, _) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] = {
            |    val fields = List(
            |      ${properties
@@ -424,71 +445,79 @@ class Scala3CodeGenerator extends CodeGeneratorStrategy {
            |  // Import these if you want to use Tapir's automatic derivation:
            |  implicit val customConfiguration: Configuration =
            |    Configuration.default.withSnakeCaseMemberNames
+           |}
            |""".stripMargin
 
       case ArraySchema(_, description, items) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SArray(implicitly[TapirSchema[${getTypeFor(items)}]]), ${description
             .map(d => s"Some(\"$d\")")
             .getOrElse("None")})
            |      .map(values => $className(values))(_.value)
+           |}
            |""".stripMargin
 
       case StringSchema(_, description, _, _) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SString(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
+           |}
            |""".stripMargin
 
       case IntegerSchema(_, description, Some("int64")) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SInteger(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
+           |}
            |""".stripMargin
 
       case IntegerSchema(_, description, _) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SInteger(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
+           |}
            |""".stripMargin
 
       case NumberSchema(_, description, Some("float")) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SNumber(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value.toFloat))(_.value.toDouble)
+           |}
            |""".stripMargin
 
       case NumberSchema(_, description, _) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SNumber(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
+           |}
            |""".stripMargin
 
       case BooleanSchema(_, description) =>
         s"""$imports
            |
-           |object ${className}Schema:
+           |object ${className}Schema {
            |  given TapirSchema[$className] =
            |    TapirSchema(SBoolean(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
+           |}
            |""".stripMargin
 
       case _ => ""

@@ -31,18 +31,21 @@ case class StringSchema(
 case class IntegerSchema(
     name: String,
     description: Option[String],
-    format: Option[String]
+    format: Option[String],
+    enumValues: Option[List[Int]] = None
 ) extends Schema
 
 case class NumberSchema(
     name: String,
     description: Option[String],
-    format: Option[String]
+    format: Option[String],
+    enumValues: Option[List[Double]] = None
 ) extends Schema
 
 case class BooleanSchema(
     name: String,
-    description: Option[String]
+    description: Option[String],
+    enumValues: Option[List[Boolean]] = None
 ) extends Schema
 
 case class ReferenceSchema(
@@ -50,6 +53,27 @@ case class ReferenceSchema(
     reference: String,
     description: Option[String]
 ) extends Schema
+
+// New schema types for oneOf and anyOf
+case class OneOfSchema(
+    name: String,
+    description: Option[String],
+    schemas: List[Schema],
+    discriminator: Option[Discriminator] = None
+) extends Schema
+
+case class AnyOfSchema(
+    name: String,
+    description: Option[String],
+    schemas: List[Schema],
+    discriminator: Option[Discriminator] = None
+) extends Schema
+
+// OpenAPI discriminator object
+case class Discriminator(
+    propertyName: String,
+    mapping: Option[Map[String, String]] = None
+)
 
 case class Property(
     name: String,

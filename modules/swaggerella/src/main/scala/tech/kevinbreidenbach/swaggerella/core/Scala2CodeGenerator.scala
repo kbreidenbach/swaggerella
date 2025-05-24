@@ -120,7 +120,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
              |""".stripMargin
         }
 
-      case IntegerSchema(name, description, format) =>
+      case IntegerSchema(name, description, format, enumValues) =>
         val baseType = format match {
           case Some("int64") => "Long"
           case _             => "Int"
@@ -134,7 +134,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |final case class $className(value: $baseType) extends AnyVal
            |""".stripMargin
 
-      case NumberSchema(name, description, format) =>
+      case NumberSchema(name, description, format, enumValues) =>
         val baseType = format match {
           case Some("float") => "Float"
           case _             => "Double"
@@ -148,7 +148,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |final case class $className(value: $baseType) extends AnyVal
            |""".stripMargin
 
-      case BooleanSchema(name, description) =>
+      case BooleanSchema(name, description, enumValues) =>
         val imports = s"package $basePackage.domain\n"
         val docs    = description.fold("")(desc => s"/** $desc */\n")
 
@@ -161,6 +161,28 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
       case ReferenceSchema(name, reference, description) =>
         // Reference types are generated elsewhere, so we don't generate them here
         ""
+
+      case OneOfSchema(name, description, schemas, discriminator) =>
+        val imports = s"package $basePackage.domain\n"
+        val docs    = description.fold("")(desc => s"/** $desc */\n")
+
+        s"""$imports
+           |
+           |$docs
+           |// OneOf type with possible discriminator: ${discriminator.map(_.propertyName).getOrElse("none")}
+           |final case class $className(value: Any) extends AnyVal
+           |""".stripMargin
+
+      case AnyOfSchema(name, description, schemas, discriminator) =>
+        val imports = s"package $basePackage.domain\n"
+        val docs    = description.fold("")(desc => s"/** $desc */\n")
+
+        s"""$imports
+           |
+           |$docs
+           |// AnyOf type with possible discriminator: ${discriminator.map(_.propertyName).getOrElse("none")}
+           |final case class $className(value: Any) extends AnyVal
+           |""".stripMargin
     }
   }
 
@@ -183,6 +205,44 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
+      case OneOfSchema(_, _, schemas, _) =>
+        val imports = List(
+          s"package $basePackage.codecs.circe",
+          "",
+          s"import $basePackage.domain.$className",
+          "import io.circe._"
+        ).mkString("\n")
+
+        s"""$imports
+           |
+           |object ${className}Codecs {
+           |  implicit val encoder: Encoder[$className] =
+           |    Encoder[Any].contramap(_.value)
+           |
+           |  implicit val decoder: Decoder[$className] =
+           |    Decoder[Any].map($className.apply)
+           |}
+           |""".stripMargin
+
+      case AnyOfSchema(_, _, schemas, _) =>
+        val imports = List(
+          s"package $basePackage.codecs.circe",
+          "",
+          s"import $basePackage.domain.$className",
+          "import io.circe._"
+        ).mkString("\n")
+
+        s"""$imports
+           |
+           |object ${className}Codecs {
+           |  implicit val encoder: Encoder[$className] =
+           |    Encoder[Any].contramap(_.value)
+           |
+           |  implicit val decoder: Decoder[$className] =
+           |    Decoder[Any].map($className.apply)
+           |}
+           |""".stripMargin
+
       case _ =>
         val imports = List(
           s"package $basePackage.codecs.circe",
@@ -192,15 +252,15 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
         ).mkString("\n")
 
         val baseType = schema match {
-          case ArraySchema(_, _, items)           => s"List[${getTypeFor(items)}]"
-          case StringSchema(_, _, _, Some(_))     => "String" // Enum
-          case StringSchema(_, _, _, _)           => "String"
-          case IntegerSchema(_, _, Some("int64")) => "Long"
-          case IntegerSchema(_, _, _)             => "Int"
-          case NumberSchema(_, _, Some("float"))  => "Float"
-          case NumberSchema(_, _, _)              => "Double"
-          case BooleanSchema(_, _)                => "Boolean"
-          case _                                  => "String"
+          case ArraySchema(_, _, items)              => s"List[${getTypeFor(items)}]"
+          case StringSchema(_, _, _, Some(_))        => "String" // Enum
+          case StringSchema(_, _, _, _)              => "String"
+          case IntegerSchema(_, _, Some("int64"), _) => "Long"
+          case IntegerSchema(_, _, _, _)             => "Int"
+          case NumberSchema(_, _, Some("float"), _)  => "Float"
+          case NumberSchema(_, _, _, _)              => "Double"
+          case BooleanSchema(_, _, _)                => "Boolean"
+          case _                                     => "String"
         }
 
         s"""$imports
@@ -281,7 +341,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case IntegerSchema(_, _, Some("int64")) =>
+      case IntegerSchema(_, _, Some("int64"), _) =>
         s"""$imports
            |
            |object ${className}Meta {
@@ -293,7 +353,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case IntegerSchema(_, _, _) =>
+      case IntegerSchema(_, _, _, _) =>
         s"""$imports
            |
            |object ${className}Meta {
@@ -305,7 +365,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case NumberSchema(_, _, Some("float")) =>
+      case NumberSchema(_, _, Some("float"), _) =>
         s"""$imports
            |
            |object ${className}Meta {
@@ -317,7 +377,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case NumberSchema(_, _, _) =>
+      case NumberSchema(_, _, _, _) =>
         s"""$imports
            |
            |object ${className}Meta {
@@ -329,7 +389,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case BooleanSchema(_, _) =>
+      case BooleanSchema(_, _, _) =>
         s"""$imports
            |
            |object ${className}Meta {
@@ -393,7 +453,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case IntegerSchema(_, description, Some("int64")) =>
+      case IntegerSchema(_, description, Some("int64"), _) =>
         s"""$imports
            |
            |object ${className}Schema {
@@ -403,7 +463,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case IntegerSchema(_, description, _) =>
+      case IntegerSchema(_, description, _, _) =>
         s"""$imports
            |
            |object ${className}Schema {
@@ -413,7 +473,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case NumberSchema(_, description, Some("float")) =>
+      case NumberSchema(_, description, Some("float"), _) =>
         s"""$imports
            |
            |object ${className}Schema {
@@ -423,7 +483,7 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case NumberSchema(_, description, _) =>
+      case NumberSchema(_, description, _, _) =>
         s"""$imports
            |
            |object ${className}Schema {
@@ -433,12 +493,32 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
            |}
            |""".stripMargin
 
-      case BooleanSchema(_, description) =>
+      case BooleanSchema(_, description, _) =>
         s"""$imports
            |
            |object ${className}Schema {
            |  implicit val schema: TapirSchema[$className] =
            |    TapirSchema(SBoolean(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
+           |      .map(value => $className(value))(_.value)
+           |}
+           |""".stripMargin
+
+      case OneOfSchema(_, description, _, _) =>
+        s"""$imports
+           |
+           |object ${className}Schema {
+           |  implicit val schema: TapirSchema[$className] =
+           |    TapirSchema(SObject(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
+           |      .map(value => $className(value))(_.value)
+           |}
+           |""".stripMargin
+
+      case AnyOfSchema(_, description, _, _) =>
+        s"""$imports
+           |
+           |object ${className}Schema {
+           |  implicit val schema: TapirSchema[$className] =
+           |    TapirSchema(SObject(), ${description.map(d => s"Some(\"$d\")").getOrElse("None")})
            |      .map(value => $className(value))(_.value)
            |}
            |""".stripMargin
@@ -522,12 +602,14 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
         }
         s"$schemaClassName.$enumName"
       case StringSchema(_, _, _, _)                                       => "\"sample-string\""
-      case IntegerSchema(_, _, Some("int64"))                             => "42L"
-      case IntegerSchema(_, _, _)                                         => "42"
-      case NumberSchema(_, _, Some("float"))                              => "42.0f"
-      case NumberSchema(_, _, _)                                          => "42.0"
-      case BooleanSchema(_, _)                                            => "true"
+      case IntegerSchema(_, _, Some("int64"), _)                          => "42L"
+      case IntegerSchema(_, _, _, _)                                      => "42"
+      case NumberSchema(_, _, Some("float"), _)                           => "42.0f"
+      case NumberSchema(_, _, _, _)                                       => "42.0"
+      case BooleanSchema(_, _, _)                                         => "true"
       case ReferenceSchema(_, reference, _)                               => s"$reference()"
+      case OneOfSchema(_, _, _, _)                                        => "\"sample-oneof-value\""
+      case AnyOfSchema(_, _, _, _)                                        => "\"sample-anyof-value\""
     }
 
   private def createPackagePath(outputDir: Path, basePackage: String, subPackage: String, fileName: String): Path = {
@@ -581,15 +663,17 @@ class Scala2CodeGenerator extends CodeGeneratorStrategy {
 
   private def getTypeFor(schema: Schema): String =
     schema match {
-      case ObjectSchema(name, _, _, _)        => toClassName(name)
-      case ArraySchema(_, _, items)           => s"List[${getTypeFor(items)}]"
-      case StringSchema(name, _, _, Some(_))  => toClassName(name) // Enum
-      case StringSchema(_, _, _, _)           => "String"
-      case IntegerSchema(_, _, Some("int64")) => "Long"
-      case IntegerSchema(_, _, _)             => "Int"
-      case NumberSchema(_, _, Some("float"))  => "Float"
-      case NumberSchema(_, _, _)              => "Double"
-      case BooleanSchema(_, _)                => "Boolean"
-      case ReferenceSchema(_, reference, _)   => toClassName(reference)
+      case ObjectSchema(name, _, _, _)           => toClassName(name)
+      case ArraySchema(_, _, items)              => s"List[${getTypeFor(items)}]"
+      case StringSchema(name, _, _, Some(_))     => toClassName(name) // Enum
+      case StringSchema(_, _, _, _)              => "String"
+      case IntegerSchema(_, _, Some("int64"), _) => "Long"
+      case IntegerSchema(_, _, _, _)             => "Int"
+      case NumberSchema(_, _, Some("float"), _)  => "Float"
+      case NumberSchema(_, _, _, _)              => "Double"
+      case BooleanSchema(_, _, _)                => "Boolean"
+      case ReferenceSchema(_, reference, _)      => toClassName(reference)
+      case OneOfSchema(name, _, _, _)            => toClassName(name)
+      case AnyOfSchema(name, _, _, _)            => toClassName(name)
     }
 }
